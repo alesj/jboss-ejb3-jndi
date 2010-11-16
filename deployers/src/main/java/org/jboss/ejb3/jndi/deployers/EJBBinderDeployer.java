@@ -21,6 +21,7 @@
  */
 package org.jboss.ejb3.jndi.deployers;
 
+import org.jboss.beans.metadata.api.annotations.Inject;
 import org.jboss.beans.metadata.plugins.builder.BeanMetaDataBuilderFactory;
 import org.jboss.beans.metadata.spi.BeanMetaData;
 import org.jboss.beans.metadata.spi.builder.BeanMetaDataBuilder;
@@ -30,6 +31,7 @@ import org.jboss.ejb3.jndi.binder.EJBBinder;
 import org.jboss.ejb3.jndi.binder.metadata.SessionBeanType;
 import org.jboss.ejb3.jndi.deployers.metadata.SessionBeanTypeWrapper;
 import org.jboss.ejb3.jndi.deployers.proxy.LegacyProxyFactory;
+import org.jboss.ejb3.jndi.deployers.spi.LegacyBindingSupplierResolver;
 import org.jboss.metadata.ejb.jboss.JBossEnterpriseBeanMetaData;
 import org.jboss.metadata.ejb.jboss.JBossSessionBeanMetaData;
 import org.jboss.reloaded.naming.deployers.javaee.JavaEEComponentInformer;
@@ -40,6 +42,8 @@ import org.jboss.reloaded.naming.spi.JavaEEComponent;
  */
 public class EJBBinderDeployer extends AbstractJavaEEComponentDeployer
 {
+   private LegacyBindingSupplierResolver legacyBindingSupplierResolver;
+   
    public EJBBinderDeployer(JavaEEComponentInformer informer)
    {
       super(informer);
@@ -88,12 +92,22 @@ public class EJBBinderDeployer extends AbstractJavaEEComponentDeployer
          beanInstanceName += "module=" + moduleName + ",component=" + componentName + ",service=" + EJBBinder.class.getSimpleName();
          BeanMetaDataBuilder builder = BeanMetaDataBuilderFactory.createBuilder(beanInstanceName, EJBBinder.class.getName());
          builder.addConstructorParameter(SessionBeanType.class.getName(), builder.createInject(sessionBeanTypeName));
+         builder.addPropertyMetaData("componentContext", builder.createInject(javaCompName));
          builder.addPropertyMetaData("globalContext", builder.createInject("NameSpaces", "globalContext"));
          builder.addPropertyMetaData("proxyFactory", new LegacyProxyFactory());
          builder.setStart("bind");
          builder.setStop("unbind");
 
+         // TODO: as long as the binder does not bind a lazy proxy we must add an explicit dependency
+         builder.addDemand(legacyBindingSupplierResolver.resolveLegacyBindingSupplier(unit, sessionBeanMetaData));
+
          unit.getParent().addAttachment(beanInstanceName, builder.getBeanMetaData());
       }
+   }
+
+   @Inject
+   public void setLegacyBindingSupplierResolver(LegacyBindingSupplierResolver resolver)
+   {
+      this.legacyBindingSupplierResolver = resolver;
    }
 }
